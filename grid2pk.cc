@@ -113,6 +113,8 @@ int main(int narg, const char* arg[])
     if (fgtrunclowval) {  // truncating grid value below threshold 
       cout << "grid2pk[2] : calling CleanNegatives() ... " << endl;    
       gpkc.CleanNegatives(lowval);
+      MeanSigma(ingrid, mean, sigma);
+      cout << "... After CleanNegatives grid Mean=" << mean << " Sigma=" << sigma << endl;
       tm.Split(" After CleanNegatives ");
     }
 
