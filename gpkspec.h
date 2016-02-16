@@ -6,7 +6,7 @@
                                                      -------  */
 
 #ifndef GPKSPEC_SEEN
-#define SPECPK_SEEN
+#define GPKSPEC_SEEN
 
 #include "machdefs.h"      
 #include "sopnamsp.h"       
@@ -21,6 +21,7 @@
 #include "fftwserver.h"    
 #include "randinterf.h"      
 
+#include "corfunc.h"
 
 
 //--- Change this to r_8 if one needs to work with double precision arrays 
@@ -62,12 +63,20 @@ public:
 // Return the reconstructed power spectrum as a profile histogram   
   HProf ComputePk(int nbin=100, double kmin=0., double kmax=-1., bool fgmodcnt=false);
 
+  // Return the reconstructed power spectrum as a profile histogram   
+  Histo2D ComputePk2D(int nbin=100, double kmax=-1.);
+
   // Fills a data table from the computed P(k) profile histogram and mode count 
   Histo FillPkDataTable(DataTable& dt, double rfac=1.);
   inline HProf& getPk() { return *hp_pk_p_; }
 
   // perform the FFT of the input array, it is called by ComputePk() if not called already
   void doFFT();
+  // perform the inverse FFT, computing the mass grid array from Fourier coefficients 
+  void doInverseFFT(bool fgNOk0=true);
+  // Generate Fourier coefficients according to an isotropic power spectrum
+  void generateFourierAmp(ClassFunc1D & pk, double sigma_z=0.);
+  
   // Changes mass/ngal grid cells < thr to thr 
   size_t CleanNegatives(TF thr=-1.);
 
@@ -85,6 +94,9 @@ protected:
   HProf* hp_pk_p_;
   Histo* hmcnt_p_;
   Histo* hmcntok_p_;
+  // 2D histograms for 2D power spectrum and number of modes 
+  Histo2D* hpk2_p_;
+  Histo2D* h2mcnt_p_;
   // double s2cut_;    for later 
 };
 

@@ -10,7 +10,9 @@
 #include "randr48.h"      
 #include "ctimer.h"      
 #include "fftwserver.h"
+#include "randfmt.h"
 
+#include "corfunc.h"
 
 #define DeuxPI 2.*M_PI 
 
@@ -28,7 +30,8 @@ GFour3DPk::GFour3DPk(TArray< TF > & mgrid)
   double dz = mgal_grid_.Info().GetD("DZ",1.);
   cout<<"GFour3DPk() - calling SetGridCellSize() with cell size from the input grid Info() object ..."<<endl;
   SetGridCellSize(dx, dy, dz, true);
-  hp_pk_p_=NULL;  hmcnt_p_=NULL;  hmcntok_p_=NULL; 
+  hp_pk_p_=NULL;  hmcnt_p_=NULL;  hmcntok_p_=NULL;
+  hpk2_p_=h2mcnt_p_=NULL;
 }
 
 // Destructor
@@ -64,7 +67,58 @@ void GFour3DPk::doFFT()
   return;
 }
 
+// Generate mass field from Fourier Coefficient
+void GFour3DPk::doInverseFFT(bool fgNOk0)
+{
+  if (fgNOk0) fourAmp(0,0,0)=complex<TF>(0.,0.);
+  FFTWServer ffts;
+  // ATTENTION : il faut qu'on soit normalize a true pour avoir la bonne normalisation (c'est le mode par defaut)
+  ffts.setNormalize(true);
+  ffts.FFTBackward(fourAmp, mgal_grid_, true);
+  if (prtlev_>1)
+    cout << " GFour3DPk::doInverseFFT done ..." << endl;
+  return;
+}
 
+// Generate mass field Fourier Coefficient
+void GFour3DPk::generateFourierAmp(ClassFunc1D & pk, double sigma_z)
+{
+  if (! fourAmp.IsAllocated())  doFFT();
+  FMTRandGen rg;
+  bool fgsmg=false;  // True, gaussian smoothing 
+  double dsig2=0.;
+  double Asmooth=1.;
+  if (sigma_z>1.e-19) {
+    dsig2 = 0.5/(sigma_z*sigma_z);
+    Asmooth=1./sqrt(2.*M_PI);
+    fgsmg=true;
+  }
+  // fourAmp represent 3-D fourier transform of a real input array. 
+  // The second half of the array along Y and Z contain negative frequencies
+  double kxx, kyy, kzz;
+  // sa_size_t is large integer type  
+  // We ignore 0th term in all frequency directions ...
+  for(sa_size_t kz=0; kz<fourAmp.SizeZ(); kz++) {
+    kzz =  (kz > fourAmp.SizeZ()/2) ? (double)(fourAmp.SizeZ()-kz)*dkz_ : (double)kz*dkz_; 
+    for(sa_size_t ky=0; ky<fourAmp.SizeY(); ky++) {
+      kyy =  (ky > fourAmp.SizeY()/2) ? (double)(fourAmp.SizeY()-ky)*dky_ : (double)ky*dky_; 
+      for(sa_size_t kx=0; kx<fourAmp.SizeX(); kx++) {  // ignore the 0th coefficient (constant term)
+	kxx=(double)kx*dkx_;
+	complex<TF> za = fourAmp(kx, ky, kz);
+	//	if (za.real()>8.e19) continue;
+	double wk = sqrt(kxx*kxx+kyy*kyy+kzz*kzz);
+        double amp = sqrt(pk(wk)/2.);
+	if (fgsmg)  amp *= (Asmooth*exp(-(kzz*kzz*dsig2)));
+	fourAmp(kx,ky,kz) = complex<TF>(rg.Gaussian(amp), rg.Gaussian(amp));
+      }
+    }
+  }
+  //  if ((prtlev_>1)||((prtlev_>0)&&(s2cut_>1.e-9))) {
+  if (prtlev_>0) {
+    cout << " Four3DPk::generateFourierAmp/Info : fourier coefficients generated"<<endl;
+  }
+  return;
+}
 
 // Compute power spectrum as a function of wave number k 
 // cells with amp^2=re^2+im^2>s2cut are ignored
@@ -83,11 +137,14 @@ HProf GFour3DPk::ComputePk(int nbin, double kmin, double kmax, bool fgmodcnt)
     double maxz=fourAmp.SizeZ()/2*dkz_;
     kmax=sqrt(maxx*maxx+maxy*maxy+maxz*maxz);
   }
-  if (nbin<2) nbin=100; 
+  if (nbin<2) nbin=100;
+  if (hp_pk_p_) delete hp_pk_p_;
   hp_pk_p_ = new HProf(kmin, kmax, nbin);
   hp_pk_p_->SetErrOpt(false);
   if (fgmodcnt) {
+    if (hmcnt_p_) delete hmcnt_p_;
     hmcnt_p_ = new Histo(kmin, kmax, nbin);
+    if (hmcntok_p_) delete hmcntok_p_;
     hmcntok_p_ = new Histo(kmin, kmax, nbin);
   }
   if (! fourAmp.IsAllocated())  doFFT();
@@ -96,6 +153,55 @@ HProf GFour3DPk::ComputePk(int nbin, double kmin, double kmax, bool fgmodcnt)
 	 <<kmin<<","<<kmax<<","<<nbin<<" ..."<<endl;
   HisPkCumul();
   return *hp_pk_p_;
+}
+
+Histo2D GFour3DPk::ComputePk2D(int nbin, double kmax)
+{
+  if (kmax<1.e-19)  {
+    double maxx=fourAmp.SizeX()*dkx_;
+    double maxy=fourAmp.SizeY()/2*dky_;
+    double maxz=fourAmp.SizeZ()/2*dkz_;
+    kmax=sqrt((maxx*maxx+maxy*maxy+maxz*maxz)*0.5);
+  }
+  if (hpk2_p_) delete hpk2_p_;
+  hpk2_p_ = new Histo2D(-kmax,kmax,nbin,-kmax,kmax,nbin);
+  if (h2mcnt_p_)  delete h2mcnt_p_;
+  h2mcnt_p_ = new Histo2D(-kmax,kmax,nbin,-kmax,kmax,nbin);
+  
+  uint_8 nmodeok=0;
+  // fourAmp represent 3-D fourier transform of a real input array. 
+  // The second half of the array along Y and Z contain negative frequencies
+  double kxx, kyy, kzz;
+  // sa_size_t is large integer type  
+  // We ignore 0th term in all frequency directions ...
+  for(sa_size_t kz=0; kz<fourAmp.SizeZ(); kz++) {
+    kzz =  (kz > fourAmp.SizeZ()/2) ? -(double)(fourAmp.SizeZ()-kz)*dkz_ : (double)kz*dkz_; 
+    for(sa_size_t ky=0; ky<fourAmp.SizeY(); ky++) {
+      kyy =  (ky > fourAmp.SizeY()/2) ? -(double)(fourAmp.SizeY()-ky)*dky_ : (double)ky*dky_; 
+      for(sa_size_t kx=0; kx<fourAmp.SizeX(); kx++) {  // ignore the 0th coefficient (constant term)
+	kxx=(double)kx*dkx_;
+	complex<TF> za = fourAmp(kx, ky, kz);
+	//	if (za.real()>8.e19) continue;
+	double ktrans = sqrt(kxx*kxx+kyy*kyy);
+	double klong = kzz;
+	double amp2 = norm(za); 
+	if (h2mcnt_p_) {
+	  h2mcnt_p_->Add(ktrans, klong);
+	  h2mcnt_p_->Add(-ktrans, klong);  // pour les kx negatifs qu'on n'a pas F(-kx) = conj(F(kx)) 
+	}
+	hpk2_p_->Add(ktrans, klong, amp2);
+	hpk2_p_->Add(-ktrans, klong, amp2);
+	nmodeok++;
+      }
+    }
+  }
+  (*hpk2_p_) /= (*h2mcnt_p_);
+  //  if ((prtlev_>1)||((prtlev_>0)&&(s2cut_>1.e-9))) {
+  if (prtlev_>0) {
+    cout << " Four3DPk::ComputePk2D/Info : NModeOK=" << nmodeok << " / NMode=" << fourAmp.Size() 
+	 << " -> " << 100.*(double)nmodeok/(double)fourAmp.Size() << "%" << endl;
+  }
+  return (*hpk2_p_);
 }
 
 // Compute power spectrum as a function of wave number k 
