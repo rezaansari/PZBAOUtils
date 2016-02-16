@@ -36,10 +36,11 @@ int main(int narg, const char* arg[])
   if ((narg<3)||((narg>1)&&(strcmp(arg[1],"-h")==0))) {
     cout << " Usage: tpk2d [options] Nx,Ny,Nz OutPk_PPFFile \n" 
 	 << " options: [-d dx,dy,dz] [-k kmin,kmax,nbin] [-t lowval] [-r rfac] [-p lev] \n"
-	 << "   -d dx,dy,dz : define input 3D map cell size (in 100-Mpc) \n"
-	 << "   -k nbin,kmin,kmax : define number of bins and k-range for P(k) computation \n"
+	 << "   -d dx,dy,dz : define input 3D map cell size (in Mpc) default=5x5x5 Mpc\n"
+	 << "   -k nbin,kmin,kmax : define number of bins and k-range for P(k) computation (def=200,0.,1.) \n"
+      	 << "   -k2d nbin2d,kmax2d : define number of bins and k-max for 2D-P(k) computation (def=100,1.) \n"
 	 << "   -t lowval : set input map cells with val<lowval to lowval before computing P(k) \n"
-      	 << "   -s sigmaz : gaussian smearing along z (in 100-Mpc units) \n"
+      	 << "   -s sigmaz : gaussian smearing along z (in Mpc units) default=0.\n"
 	 << "   -r rfac : P(k) renormalisation factor \n"
 	 << "   -p lev : define print level (0,1,2..) \n" << endl;
     return 1;
@@ -52,9 +53,11 @@ int main(int narg, const char* arg[])
     long int Nx,Ny,Nz; 
     bool fgsetcellsize=false;
     double dx,dy,dz;
-    dx=dy=dz=0.05; 
-    int nkbin=100;
-    double kmin=0.001, kmax=100.;
+    dx=dy=dz=5; 
+    int nkbin=200;
+    double kmin=0., kmax=1.;
+    int nkbin2d=100;
+    double kmax2d=1.;
     bool fgtrunclowval=false;
     double lowval=-9.e19;
     double sigmaz=0.;
@@ -71,10 +74,15 @@ int main(int narg, const char* arg[])
 	sscanf(arg[2],"%lf,%lf,%lf",&dx,&dy,&dz); 
 	fgsetcellsize=true; arg+=2; narg-=2; 
       }
-      else if (fbo=="-k")  {   // specification taille de cellules (Mpc) drho/rho ou ngal 
+      else if (fbo=="-k")  {   // specification nb-bin kmin,kmax pour calcul P(k)  
 	if (narg<3) { cout << " tpk2d/missing/bad argument, tpk2d -h for help " << endl;  return 2; }
 	sscanf(arg[2],"%d,%lf,%lf",&nkbin,&kmin,&kmax);  arg+=2; narg-=2; 
       }
+      else if (fbo=="-k2d")  {   // specification nb-bin kmax pour calcul 2D-P(k)  
+	if (narg<3) { cout << " tpk2d/missing/bad argument, tpk2d -h for help " << endl;  return 2; }
+	sscanf(arg[2],"%d,%lf",&nkbin2d,&kmax2d);  arg+=2; narg-=2; 
+      }
+
       else if (fbo=="-t")  { 
 	if (narg<3) { cout << " tpk2d/missing/bad argument, tpk2d -h for help " << endl;  return 2; }
 	lowval=atof(arg[2]);  fgtrunclowval=true; arg+=2; narg-=2; 
@@ -133,17 +141,13 @@ int main(int narg, const char* arg[])
     cout << "tpk2d[2] : Input power spectrum ... "<<endl;    
     Xsi1 xsi;
     Vector vxsi=xsi.FillVec();
-    //DBG     cout<<" *DBG* done Vector vxsi=xsi.FillVec();" << endl;
     PkFrXsi pk(xsi);
     Vector vpk=pk.FillVec();
-    //DBG    cout<<" *DBG* done PkFrXsi pk(xsi).FillVec();" << endl;
     InterpPk interpkA(pk,0.,200.,2500,false);
     XsiFrPk xsipk(interpkA);
     Vector vxsipk=xsipk.FillVec();
-    //DBG     cout<<" *DBG* done XsiFrPk xsipk(interpkA).FillVec();" << endl;
     InterpPk interpk(pk);
     Vector vpkinterp=interpk.FillVec();
-    //DBG    cout<<" *DBG* done InterpPk interpk(pk).FillVec();" << endl;
     XsiFrPk xsipki(interpk);
     Vector vxsipki=xsipki.FillVec();
     //DBG    cout<<" *DBG* done XsiFrPk xsipki(interpk).FillVec();" << endl;
@@ -167,12 +171,11 @@ int main(int narg, const char* arg[])
     if (sigmaz>0.) cout << " Smearing along the z-axis with sigma="<<sigmaz<<endl;
     gpkc.generateFourierAmp(interpk, sigmaz);
     tm.Split(" After generateFourierAmp ");
-    
-    cout << "tpk2d[4.a] : Computing 1D power spectrum ... " << endl;
-    HProf recPk=gpkc.ComputePk(200, 0., 75., true);
+    cout << "tpk2d[4.a] : Computing 1D power spectrum ... nbin="<<nkbin<<" kmin="<<kmin<<" kmax="<<kmax<<endl;
+    HProf recPk=gpkc.ComputePk(nkbin, kmin, kmax, true);
 
-    cout << "tpk2d[4.b] : Computing 2D power spectrum ... " << endl;
-    Histo2D recPk2D=gpkc.ComputePk2D(100,50.);
+    cout << "tpk2d[4.b] : Computing 2D power spectrum ... nbin="<<nkbin2d<<" kmax="<<kmax2d<<endl; 
+    Histo2D recPk2D=gpkc.ComputePk2D(nkbin2d,kmax2d);
     tm.Split(" After P(k)-reconstruction ");
 
     pof<<PPFNameTag("recPk")<<recPk;

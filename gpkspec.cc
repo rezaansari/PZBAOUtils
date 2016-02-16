@@ -89,14 +89,16 @@ void GFour3DPk::generateFourierAmp(ClassFunc1D & pk, double sigma_z)
   double dsig2=0.;
   double Asmooth=1.;
   if (sigma_z>1.e-19) {
-    dsig2 = 0.5/(sigma_z*sigma_z);
+    dsig2 = 0.5*sigma_z*sigma_z;
     Asmooth=1./sqrt(2.*M_PI);
     fgsmg=true;
   }
   // fourAmp represent 3-D fourier transform of a real input array. 
   // The second half of the array along Y and Z contain negative frequencies
   double kxx, kyy, kzz;
-  // sa_size_t is large integer type  
+  // sa_size_t is large integer type
+  cout << " Four3DPk::generateFourierAmp/Info : generating fourier coefficients ..."<<endl;
+  ProgressBar pgb(fourAmp.SizeZ());
   // We ignore 0th term in all frequency directions ...
   for(sa_size_t kz=0; kz<fourAmp.SizeZ(); kz++) {
     kzz =  (kz > fourAmp.SizeZ()/2) ? (double)(fourAmp.SizeZ()-kz)*dkz_ : (double)kz*dkz_; 
@@ -112,10 +114,7 @@ void GFour3DPk::generateFourierAmp(ClassFunc1D & pk, double sigma_z)
 	fourAmp(kx,ky,kz) = complex<TF>(rg.Gaussian(amp), rg.Gaussian(amp));
       }
     }
-  }
-  //  if ((prtlev_>1)||((prtlev_>0)&&(s2cut_>1.e-9))) {
-  if (prtlev_>0) {
-    cout << " Four3DPk::generateFourierAmp/Info : fourier coefficients generated"<<endl;
+    pgb.update(kz);
   }
   return;
 }

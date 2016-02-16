@@ -38,6 +38,7 @@ public:
   }
   inline double MyValue(double r) const
   {
+    r/=100.;  // pour avoir une echelle similaire a la cosmo - s_bao ~ 100 Mpc
     double ra=r/rA;
     double raa=(r-a_*rA)/(b_*rA);
     double rb=(r-r0B)/sigmaB;
@@ -68,7 +69,7 @@ public:
     C=a.C;  lenC=a.lenC;
     a_=a.a_;  b_=a.b_;  AA=a.AA;
   }
-  Vector FillVec(double rmax=3., int N=200)
+  Vector FillVec(double rmax=300., int N=200)
   {
     Vector vxsi(N);
     double dr=rmax/(double)N;
@@ -78,7 +79,7 @@ public:
     }
     return vxsi;
   }
-  Histo2D FillHisto(double rmax=3., int N=100)
+  Histo2D FillHisto(double rmax=300., int N=100)
   {
     Histo2D h2(-rmax,rmax,N,-rmax,rmax,N);
     cout<<"Xsi1::FillHisto() ..."<<endl;
@@ -126,7 +127,7 @@ class PkFrXsi : public ClassFunc1D, public ClassFunc2D {
 public:
   //  PkFrXsi(ClassFunc1D const & xsi, double rmax=4., int glorder=75)
   //    : xsi_(xsi), rmax_(rmax), gli1d_(xsi_,0.,rmax)
-  PkFrXsi(ClassFunc1D const & xsi, double rmax=4., double dr=0.005) : xsi_(xsi), rmax_(rmax), dr_(dr)
+  PkFrXsi(ClassFunc1D const & xsi, double rmax=500., double dr=0.25) : xsi_(xsi), rmax_(rmax), dr_(dr)
   {
     //    gli1d_.SetOrder(glorder);
     //    C_=2./sqrt(2.*M_PI);
@@ -159,7 +160,7 @@ public:
     double k = sqrt(klong*klong+ktrans*ktrans);
     return MyValue(k);
   }
-  Vector FillVec(double kmax=50., int N=200)
+  Vector FillVec(double kmax=0.5, int N=200)
   {
     Vector vpk(N);
     double dk=kmax/(double)N;
@@ -169,7 +170,7 @@ public:
     }
     return vpk;
   }
-  Histo2D FillHisto(double kmax=50, int N=100)
+  Histo2D FillHisto(double kmax=0.5, int N=100)
   {
     cout<<"PkFrXsi::FillHisto() ..."<<endl;
     Histo2D h2(-kmax,kmax,N,-kmax,kmax,N);
@@ -197,7 +198,7 @@ public:
 //-----------------------------------------------------------------------------------------
 class InterpPk : public SLinInterp1D, public ClassFunc2D {
 public:
-  InterpPk(ClassFunc1D const & pk, double kmin=0., double kmax=200., int npt=2500, bool fgckneg=true)
+  InterpPk(ClassFunc1D const & pk, double kmin=0., double kmax=2., int npt=2000, bool fgckneg=true)
   {
     double dk=(kmax-kmin)/(double)npt;
     vector<double> vpk(npt+1);
@@ -223,7 +224,7 @@ public:
     double k = sqrt(klong*klong+ktrans*ktrans);
     return SLinInterp1D::operator()(k);
   }
-  Vector FillVec(double kmax=50., int N=200)
+  Vector FillVec(double kmax=0.5, int N=200)
   {
     Vector vpk(N);
     double dk=kmax/(double)N;
@@ -233,7 +234,7 @@ public:
     }
     return vpk;
   }  
-  Histo2D FillHisto(double kmax=50, int N=100)
+  Histo2D FillHisto(double kmax=0.5, int N=100)
   {
     cout<<"InterpPk::FillHisto() ..."<<endl;
     Histo2D h2(-kmax,kmax,N,-kmax,kmax,N);
@@ -257,7 +258,7 @@ public:
 //--------------------------------------------------------------------------------
 class XsiFrPk : public ClassFunc1D {
 public:
-  XsiFrPk(ClassFunc1D const & pk, double kmax=50., double dk=0.005) : pk_(pk), kmax_(kmax), dk_(dk) { }
+  XsiFrPk(ClassFunc1D const & pk, double kmax=0.5, double dk=0.00025) : pk_(pk), kmax_(kmax), dk_(dk) { }
   virtual double operator()(double r)  const
   {
     if (r<0.)  throw ParmError("XsiFrPk::operator()(double r)  r<0 !");
@@ -276,7 +277,7 @@ public:
     return this->operator()(r);
   }
 
-  Vector FillVec(double rmax=3., int N=200)
+  Vector FillVec(double rmax=300., int N=200)
   {
     Vector vxsi(N);
     double dr=rmax/(double)N;
@@ -286,7 +287,7 @@ public:
     }
     return vxsi;
   }
-  Histo2D FillHisto(double rmax=3., int N=100)
+  Histo2D FillHisto(double rmax=300., int N=100)
   {
     Histo2D h2(-rmax,rmax,N,-rmax,rmax,N);
     cout<<"XsiFrPk::FillHisto() ..."<<endl;
@@ -331,7 +332,7 @@ public:
 //--------------------------------------------------------------------------------
 class XsiFrPk2D : public ClassFunc2D {
 public:
-  XsiFrPk2D(ClassFunc2D const & pk, double kmax=100., int glorder=75) : pk_(pk), kmax_(kmax), glorder_(glorder) { }
+  XsiFrPk2D(ClassFunc2D const & pk, double kmax=1., int glorder=75) : pk_(pk), kmax_(kmax), glorder_(glorder) { }
   
   inline void setGLOrder(int glorder=75) { glorder_=glorder; }
   inline int  getGLOrder() { return glorder_; }
@@ -359,7 +360,7 @@ public:
     return (2.*rv)/(sqrt(M_PI));
   }
 
-  Histo2D FillHisto(double rmax=3., int N=100)
+  Histo2D FillHisto(double rmax=300., int N=100)
   {
     Histo2D h2(-rmax,rmax,N,-rmax,rmax,N);
     cout<<"XsiFrPk2D::FillHisto() ..."<<endl;
