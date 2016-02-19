@@ -25,6 +25,27 @@ and 1D and 2D correlation function
    -t lowval : set input map cells with val<lowval to lowval before computing P(k) **NOT USED** 
    -r rfac : P(k) renormalisation factor **NOT USED**  
 
+##  Compute reconstructed P(k) and xsi(r) starting from Xsi1 test auto-correlation function
+# with 7.5 Mpc smearing along z
+./Objs/tpk2d -s 7.5 - totos.ppf
+
+## Check and display some of the results using piapp
+spiapp -term
+
+setaxesatt 'font=helvetica,bold,20 fixedfontsize minorticks'
+openppf totos.ppf
+newwin 2 1 1000 500
+disp vpkinterp "arra_xlim=0.,${vpkinterp.info.kmax}  red"
+disp recPk 'same black'
+disp vxsipki "arra_xlim=0.,${vxsipki.info.rmax}  red"
+disp recXsi  'same black'
+
+newwin 2 1 1000 500
+disp recPk2D 'xylimits=-0.4,0.4,-0.4,0.4 h2disp=img colbr128'
+disp recXsi2D  'xylimits=-200,200,-200,200 h2disp=img colbr128'
+
+
+
 -------------------------------------------------------------------------
 galcatext.cc : to extract rows from a fits bin table (Galaxy catalog) and write 
  the subset to a new fits file
