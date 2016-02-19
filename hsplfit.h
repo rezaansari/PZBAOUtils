@@ -55,6 +55,38 @@ protected:
 
 };
 
+class H1DLinInterpol : public ClassFunc1D {
+public:
+  H1DLinInterpol(Histo & h)  : h_(h)
+  {
+  }
+  ~H1DLinInterpol()
+  {
+  } 
+  virtual double operator()(double x)  const
+  {
+    int ibx = (x-h_.XMin())/h_.BinWidth ();
+    if (ibx<0)  ibx=0;
+    if (ibx >= h_.NBins())  ibx=h_.NBins()-1;
+    return h_(ibx);
+  }
+  void FillHisto(Histo & h)
+  {
+    cout<<"H1DLinInterpol::FillHisto() ..."<<endl;
+    //    ProgressBar pgb(h2.NBinX());
+    for(int i=0; i<h.NBins() ; i++) {
+      double x; 
+      x=h.BinCenter(i); 
+      double val=this->operator()(x);
+      h.Add(x,val);
+    }
+    return;
+  }
+
+protected:
+  Histo & h_;
+};
+
 class H2DLinInterpol : public ClassFunc2D {
 public:
   H2DLinInterpol(Histo2D & h2d, bool fgexy=false)  : h2_(h2d), fgexy_(fgexy)

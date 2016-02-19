@@ -34,23 +34,31 @@
 int main(int narg, const char* arg[])
 {
   if ((narg<3)||((narg>1)&&(strcmp(arg[1],"-h")==0))) {
-    cout << " Usage: tpk2d [options] Nx,Ny,Nz OutPk_PPFFile \n" 
-	 << " options: [-d dx,dy,dz] [-k kmin,kmax,nbin] [-t lowval] [-r rfac] [-p lev] \n"
-	 << "   -d dx,dy,dz : define input 3D map cell size (in Mpc) default=5x5x5 Mpc\n"
+    cout << " Usage: tpk2d [options] InputPkFile Out_PPFFile \n"
+	 << "   InputPkFile : text file with pairs of values k  Pk on each line \n"
+	 << "       Specify  InputPkFile = '.' or '-' for default P(k) defined in corfunc.h \n"
+	 << " options: [-N Nx,Ny,Nz] [-d dx,dy,dz] [-k kmin,kmax,nbin] [-k2d nbin2d,kmax2d] \n"
+	 << "          [-s sigmaz] [-t lowval] [-r rfac] [-p lev] \n"
+      	 << "   -N Nx,Ny,Nz : define input 3D grid size default=400x400x400 \n"
+	 << "   -d dx,dy,dz : define input 3D grid cell size (in Mpc) default=5x5x5 Mpc\n"
 	 << "   -k nbin,kmin,kmax : define number of bins and k-range for P(k) computation (def=200,0.,1.) \n"
       	 << "   -k2d nbin2d,kmax2d : define number of bins and k-max for 2D-P(k) computation (def=100,1.) \n"
-	 << "   -t lowval : set input map cells with val<lowval to lowval before computing P(k) \n"
-      	 << "   -s sigmaz : gaussian smearing along z (in Mpc units) default=0.\n"
-	 << "   -r rfac : P(k) renormalisation factor \n"
-	 << "   -p lev : define print level (0,1,2..) \n" << endl;
+	 << "   -s sigmaz : gaussian smearing along z (in Mpc units) default=0.\n"
+      	 << "   -p lev : define print level (0,1,2..) \n" 
+	 << "   -t lowval : set input map cells with val<lowval to lowval before computing P(k) **NOT USED** \n"
+	 << "   -r rfac : P(k) renormalisation factor **NOT USED**  \n"
+	 << endl;
     return 1;
   }
   Timer tm("tpk2d");
   int rc = 0;
   try { 
-    string outppfname;
+    string inpkname=".";
+    string outppfname="toto.ppf";
+	
     // Taille du cube 
-    long int Nx,Ny,Nz; 
+    long int Nx,Ny,Nz;
+    Nx=Ny=Nz=400;
     bool fgsetcellsize=false;
     double dx,dy,dz;
     dx=dy=dz=5; 
@@ -69,7 +77,12 @@ int main(int narg, const char* arg[])
     bool fgoptarg=true;
     while (fgoptarg&&(narg>1)) {
       string fbo = arg[1];
-      if (fbo=="-d")  {   // specification taille de cellules (Mpc) drho/rho ou ngal 
+      if (fbo=="-N")  {   // specification taille de cellules (Mpc) drho/rho ou ngal 
+	if (narg<3) { cout << " tpk2d/missing/bad argument, tpk2d -h for help " << endl;  return 2; }
+	sscanf(arg[1],"%ld,%ld,%ld",&Nx,&Ny,&Nz);
+	arg+=2; narg-=2; 
+      }
+      else if (fbo=="-d")  {   // specification taille de cellules (Mpc) drho/rho ou ngal 
 	if (narg<3) { cout << " tpk2d/missing/bad argument, tpk2d -h for help " << endl;  return 2; }
 	sscanf(arg[2],"%lf,%lf,%lf",&dx,&dy,&dz); 
 	fgsetcellsize=true; arg+=2; narg-=2; 
@@ -103,7 +116,8 @@ int main(int narg, const char* arg[])
     }
     //----------------------------------------------------------
     if (narg<3) { cout << " tpk2d/missing/bad argument, tpk2d -h for help " << endl;  return 2; }
-    sscanf(arg[1],"%ld,%ld,%ld",&Nx,&Ny,&Nz);
+
+    inpkname=arg[1];
     outppfname=arg[2];
 
     cout << "tpk2d[1.a] : Opening output PPF file " << outppfname <<endl;
@@ -138,33 +152,41 @@ int main(int narg, const char* arg[])
       tm.Split(" After CleanNegatives ");
     }
     */
-    cout << "tpk2d[2] : Input power spectrum ... "<<endl;    
-    Xsi1 xsi;
-    Vector vxsi=xsi.FillVec();
-    PkFrXsi pk(xsi);
-    Vector vpk=pk.FillVec();
-    InterpPk interpkA(pk,0.,200.,2500,false);
-    XsiFrPk xsipk(interpkA);
-    Vector vxsipk=xsipk.FillVec();
-    InterpPk interpk(pk);
+    cout << "tpk2d[2] : Input power spectrum ... "<<endl;
+    InterpPk* interpk_p=NULL;
+    if ((inpkname != ".")&&(inpkname != "-")) {
+      cout << "tpk2d[2.a] : reading input power spectrum from file "<<inpkname<<endl;
+      interpk_p= new InterpPk(inpkname);
+    }
+    else {
+      cout << "tpk2d[2.a] : creating default input P(k) from Xsi1 (corfunc.h) "<<endl;
+      Xsi1 xsi;
+      Vector vxsi=xsi.FillVec();
+      PkFrXsi pk(xsi);
+      Vector vpk=pk.FillVec();
+      interpk_p= new InterpPk(pk);
+      pof<<PPFNameTag("vxsi")<<vxsi;
+      pof<<PPFNameTag("vpk")<<vpk;
+      cout << " ... saved vxsi vpk  to output PPF  ... "<<endl;
+    }
+    cout << "tpk2d[2.b] : computing xsi from interpolated P(k)  "<<endl;
+    InterpPk & interpk = (*interpk_p);
     Vector vpkinterp=interpk.FillVec();
+    //DBG    cout<<" *DBG* done InterpPk interpk.FillVec()" << endl;
     XsiFrPk xsipki(interpk);
     Vector vxsipki=xsipki.FillVec();
     //DBG    cout<<" *DBG* done XsiFrPk xsipki(interpk).FillVec();" << endl;
-    Histo2D hxsi2d=xsipk.FillHisto();
+    Histo2D hxsi2d=xsipki.FillHisto();
     //DBG    cout<<" *DBG* done XsiFrPk xsipki(interpk).FillHisto();" << endl;
-    XsiFrPk2D xsi2d(interpk);
+    XsiFrPk2D xsi2d(interpk,5.,150);
     Histo2D hxsi2dB=xsi2d.FillHisto();
 
-    pof<<PPFNameTag("vxsi")<<vxsi;
-    pof<<PPFNameTag("vpk")<<vpk;
     pof<<PPFNameTag("vpkinterp")<<vpkinterp;
-    pof<<PPFNameTag("vxsipk")<<vxsipk;
     pof<<PPFNameTag("vxsipki")<<vxsipki;
     pof<<PPFNameTag("hxsi2d")<<hxsi2d;
     pof<<PPFNameTag("hxsi2dB")<<hxsi2dB;
 
-    cout << "tpk2d[2.b] : saved vxsi vpk vpkinterp vxsipk vxsipki hxsi2d hxsi2dB to output PPF  ... "<<endl;    
+    cout << "tpk2d[2.c] : saved vxsi vpk vpkinterp vxsipk vxsipki hxsi2d hxsi2dB to output PPF  ... "<<endl;    
     tm.Split(" After Input power spectrum ");
 
     cout << "tpk2d[3] : Generating Fourier coefficients from power spectrum ... " << endl;
@@ -182,14 +204,21 @@ int main(int narg, const char* arg[])
     pof<<PPFNameTag("recPk2D")<<recPk2D;
     cout << "tpk2d[4.c] : saved  recPk & recPk2D to output PPF  ... "<<endl;    
 
-    cout << "tpk2d[5] : Computing 2D correlation function from 2D-P(k) ... " << endl;
+    cout << "tpk2d[5.c] : Computing 1D correlation function from recP(k) ... " << endl;    
+    H1DLinInterpol hlint(recPk);
+    XsiFrPk xsirec(hlint);
+    Vector recXsi=xsirec.FillVec();
+    
+    cout << "tpk2d[5.b] : Computing 2D correlation function from 2D-recP(k) ... " << endl;
     //    H2DSpline h2spl(recPk2D);
     H2DLinInterpol h2lint(recPk2D, true);
     XsiFrPk2D xsi2drec(h2lint);
     Histo2D recXsi2D=xsi2drec.FillHisto();
-    tm.Split(" After Xsi2D-reconstruction ");
+    tm.Split(" After Xsi/Xsi2D-reconstruction ");
+
+    pof<<PPFNameTag("recXsi")<<recXsi;
     pof<<PPFNameTag("recXsi2D")<<recXsi2D;
-    cout << "tpk2d[5.b] : saved  recXsi2D to output PPF  ... "<<endl;    
+    cout << "tpk2d[5.c] : saved  recXsi & recXsi2D to output PPF  ... "<<endl;    
     
     /*
     cout << "tpk2d[4] : computing power spectrum ... " << endl;
@@ -213,6 +242,7 @@ int main(int narg, const char* arg[])
       po<<PPFNameTag("dtpk")<<dtpk;
     }
     */
+    if (interpk_p) delete interpk_p;
   }  // End of try bloc 
   catch (PThrowable & exc) {  // catching SOPHYA exceptions
     cerr << " tpk2d.cc: Catched Exception (PThrowable)" << (string)typeid(exc).name() 

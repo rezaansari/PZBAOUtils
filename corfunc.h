@@ -77,9 +77,10 @@ public:
       double r=(double)i*dr;
       vxsi(i)=MyValue(r);
     }
+    vxsi.Info()["rmax"]=rmax;
     return vxsi;
   }
-  Histo2D FillHisto(double rmax=300., int N=100)
+  Histo2D FillHisto2D(double rmax=300., int N=100)
   {
     Histo2D h2(-rmax,rmax,N,-rmax,rmax,N);
     cout<<"Xsi1::FillHisto() ..."<<endl;
@@ -127,7 +128,7 @@ class PkFrXsi : public ClassFunc1D, public ClassFunc2D {
 public:
   //  PkFrXsi(ClassFunc1D const & xsi, double rmax=4., int glorder=75)
   //    : xsi_(xsi), rmax_(rmax), gli1d_(xsi_,0.,rmax)
-  PkFrXsi(ClassFunc1D const & xsi, double rmax=500., double dr=0.25) : xsi_(xsi), rmax_(rmax), dr_(dr)
+  PkFrXsi(ClassFunc1D const & xsi, double rmax=500., double dr=0.1) : xsi_(xsi), rmax_(rmax), dr_(dr)
   {
     //    gli1d_.SetOrder(glorder);
     //    C_=2./sqrt(2.*M_PI);
@@ -135,7 +136,6 @@ public:
   }
   inline double MyValue(double k) const
   {
-    double dr_=0.005;
     if (k<0.)  throw ParmError("PkFrXsi::operator()(double k)  k<0 !");
     double rv=0;
     if (k<1.e-9) {
@@ -168,6 +168,7 @@ public:
       double k=(double)i*dk;
       vpk(i)=MyValue(k);
     }
+    vpk.Info()["kmax"]=kmax;
     return vpk;
   }
   Histo2D FillHisto(double kmax=0.5, int N=100)
@@ -215,14 +216,22 @@ public:
     if (fgckneg && cntneg>0)
       cout << " InterpPk() - negative P(k) set to zero , NegCount="<<cntneg<<" /NPT="<<npt+1<<endl;
   }
+  InterpPk(string const & pkfilename)
+  {
+    cout << " InterpPk() - Creating from (k Pk) pairs from input file"<<pkfilename;
+    ReadXYFromFile(pkfilename);
+    //DBG    Print(1);
+  }
   virtual double operator()(double k)  const
   {
-    return SLinInterp1D::operator()(k);
+    return YInterp(k);
+    //    return SLinInterp1D::operator()(k);
   }
   virtual double operator()(double klong, double ktrans)  const
   {
     double k = sqrt(klong*klong+ktrans*ktrans);
-    return SLinInterp1D::operator()(k);
+    return YInterp(k);
+    //    return SLinInterp1D::operator()(k);
   }
   Vector FillVec(double kmax=0.5, int N=200)
   {
@@ -232,6 +241,7 @@ public:
       double k=(double)i*dk;
       vpk(i)=this->operator()(k);
     }
+    vpk.Info()["kmax"]=kmax;
     return vpk;
   }  
   Histo2D FillHisto(double kmax=0.5, int N=100)
@@ -250,6 +260,7 @@ public:
     }
     return h2;
   }
+
 };
 
 
@@ -258,7 +269,10 @@ public:
 //--------------------------------------------------------------------------------
 class XsiFrPk : public ClassFunc1D {
 public:
-  XsiFrPk(ClassFunc1D const & pk, double kmax=0.5, double dk=0.00025) : pk_(pk), kmax_(kmax), dk_(dk) { }
+  XsiFrPk(ClassFunc1D const & pk, double kmax=2.0, double dk=0.0005) : pk_(pk), kmax_(kmax), dk_(dk)
+  {
+    C_=2.*dk_/sqrt(2.*M_PI);
+  }
   virtual double operator()(double r)  const
   {
     if (r<0.)  throw ParmError("XsiFrPk::operator()(double r)  r<0 !");
@@ -269,7 +283,7 @@ public:
     else {
       for(double k=dk_; k<kmax_; k+=dk_)  rv+=pk_(k)*(sin(k*r))*k/r; 
     }
-    return (2.*rv*dk_)/(sqrt(2.*M_PI));
+    return (C_*rv);
   }
   virtual double operator()(double rlong, double rtrans)  const
   {
@@ -285,6 +299,7 @@ public:
       double r=(double)i*dr;
       vxsi(i)=this->operator()(r);
     }
+    vxsi.Info()["rmax"]=rmax;
     return vxsi;
   }
   Histo2D FillHisto(double rmax=300., int N=100)
@@ -306,6 +321,7 @@ public:
 
   ClassFunc1D const & pk_;
   double kmax_, dk_;
+  double C_;
 };
 
 //--------------------------------------------------------------------------------
@@ -332,7 +348,7 @@ public:
 //--------------------------------------------------------------------------------
 class XsiFrPk2D : public ClassFunc2D {
 public:
-  XsiFrPk2D(ClassFunc2D const & pk, double kmax=1., int glorder=75) : pk_(pk), kmax_(kmax), glorder_(glorder) { }
+  XsiFrPk2D(ClassFunc2D const & pk, double kmax=2., int glorder=75) : pk_(pk), kmax_(kmax), glorder_(glorder) { }
   
   inline void setGLOrder(int glorder=75) { glorder_=glorder; }
   inline int  getGLOrder() { return glorder_; }
@@ -360,7 +376,7 @@ public:
     return (2.*rv)/(sqrt(M_PI));
   }
 
-  Histo2D FillHisto(double rmax=300., int N=100)
+  Histo2D FillHisto(double rmax=500., int N=100)
   {
     Histo2D h2(-rmax,rmax,N,-rmax,rmax,N);
     cout<<"XsiFrPk2D::FillHisto() ..."<<endl;
